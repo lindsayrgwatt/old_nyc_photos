@@ -6,6 +6,9 @@ Include a few things in this repository:
 
 1. Python code to download some images and resize them for the inkplate
 2. An arduino sketch to show the images on the Inkplate
+
+    * *Update* 10/24 - Added additional version that downloads images from a server
+
 3. An Openscad file to create a case for the Inkplate
 
 Enjoy!

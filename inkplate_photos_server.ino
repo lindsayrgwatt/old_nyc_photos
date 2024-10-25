@@ -4,14 +4,22 @@
 #include <HTTPClient.h>            // HTTP library for calling API
 #include <ArduinoJson.h>           // JSON parsing library
 #include "SdFat.h"                 // Used to load secrets
+#include <algorithm>               // For std::find
+
+/*
+ Message to future self: tried to implemement this where wrote to disk and saved images rather than
+ making calls to server every sleep cycle (to save batter). Couldn't get permission to write to SD 
+ so reverted to calling server.
+*/
 
 Inkplate display(INKPLATE_3BIT);   // Set library to work in gray mode
 
 #define uS_TO_S_FACTOR 1000000     // Conversion factor for microseconds to seconds
-#define TIME_TO_SLEEP  600         // Deep sleep time (in seconds)
+unsigned long TIME_TO_SLEEP = 600; // Deep sleep time (in seconds); overwritten by API
 #define API_URL "https://lindsayrgwatt.com/api/device-images/1/"
 
 RTC_DATA_ATTR unsigned long bootCount = 0;    // Track the number of boots
+RTC_DATA_ATTR std::vector<int> shownImages;   // Track indices of shown images
 
 SdFat SD;
 
@@ -53,6 +61,9 @@ void setup() {
     // Fetch API data
     APIData apiData = fetchAPIData();
 
+    // Update TIME_TO_SLEEP based on display time from API (60 * displayTime)
+    TIME_TO_SLEEP = 60 * apiData.displayTime;
+
     // Display a random image from the API
     displayRandomImage(apiData);
 
@@ -76,7 +87,6 @@ void connectWiFi() {
     Serial.println("Connected to WiFi");
 }
 
-// Read the secret keys from the device filesystem
 // Read the secret keys from the device filesystem
 bool readSecrets() {
     // Ensure the SD card is initialized before attempting to open files
@@ -240,17 +250,30 @@ void downloadAndDisplayImage(String url) {
     }
 }
 
-// Display a random image from the API response
+// Display a random image from the API response, ensuring no repeats until all are shown
 void displayRandomImage(const APIData& apiData) {
     if (apiData.imageUrls.empty()) {
         Serial.println("No images available from the API.");
         return;
     }
 
-    // Pick a random image from the API data
-    int index = random(apiData.imageUrls.size());
-    String imageUrl = apiData.imageUrls[index];
+    // Check if we've shown all images, if so, reset the shownImages list
+    if (shownImages.size() == apiData.imageUrls.size()) {
+        Serial.println("All images have been shown. Resetting list.");
+        shownImages.clear();
+    }
 
+    // Pick an image that hasn't been shown yet
+    int index;
+    do {
+        index = random(apiData.imageUrls.size());
+    } while (std::find(shownImages.begin(), shownImages.end(), index) != shownImages.end());
+
+    // Add the chosen image index to the shownImages list
+    shownImages.push_back(index);
+
+    // Display the chosen image
+    String imageUrl = apiData.imageUrls[index];
     Serial.println("Displaying image: " + imageUrl);
     downloadAndDisplayImage(imageUrl);
 }
